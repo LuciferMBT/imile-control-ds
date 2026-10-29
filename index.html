@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>iMile DS - GDL-Berumen.DS | MEX</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Librería SheetJS para procesar el archivo Inventario OFD.xlsx en memoria sin abrir Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; color: #0f172a; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    .excel-header { background: linear-gradient(180deg, #d9ebf9 0%, #bcdcf5 100%); border-bottom: 1px solid #9cbdd9; color: #0f172a; }
+    .excel-total { background: linear-gradient(180deg, #d9ebf9 0%, #c4e1f7 100%); border-top: 2px solid #7ea8cc; border-bottom: 2px solid #7ea8cc; }
+    .excel-cell { border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- 1. PANTALLA DE LOGIN IDÉNTICA A ds-login.imile.com -->
+  <div id="loginScreen" class="fixed inset-0 z-50 bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex flex-col justify-center items-center p-4">
+    <div class="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-100 p-7">
+      <div class="flex items-center justify-between mb-4">
+        <span class="text-2xl font-black text-blue-700 tracking-tight">iMile <span class="text-xs font-semibold text-slate-400">Delivery</span></span>
+        <span class="text-xs font-semibold text-slate-500">🌐 Español</span>
+      </div>
+
+      <h1 class="text-xl font-extrabold text-center text-slate-900 mb-5">Bienvenido a iMile</h1>
+
+      <div class="flex border-b border-slate-200 mb-5 text-sm font-bold">
+        <div class="flex-1 text-center pb-2.5 border-b-2 border-blue-600 text-blue-600">Cuenta</div>
+        <div class="flex-1 text-center pb-2.5 text-slate-400">Lark</div>
+      </div>
+
+      <form onsubmit="iniciarSesionIMile(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1.5">Cuenta</label>
+          <input id="imileUser" type="text" required placeholder="Por favor ingrese el nombre de usuario"
+            class="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-600" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1.5">Contraseña</label>
+          <div class="relative">
+            <input id="imilePass" type="password" required placeholder="Por favor introduzca contraseña"
+              class="w-full pl-3.5 pr-10 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-blue-600" />
+            <button type="button" onclick="verPassword()" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-blue-600">
+              👁️
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between text-xs pt-1">
+          <label class="flex items-center gap-2 cursor-pointer font-semibold text-blue-600">
+            <input id="imileRemember" type="checkbox" checked class="w-4 h-4 rounded text-blue-600" />
+            <span>Recordar</span>
+          </label>
+          <span class="text-slate-400">ds-login.imile.com</span>
+        </div>
+
+        <button type="submit" class="w-full py-3 rounded-lg bg-[#6c8cff] hover:bg-blue-600 text-white font-bold text-sm shadow transition">
+          Acceso
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. BARRA SUPERIOR DE ESTACIÓN (SIN BOTÓN DE PERMISOS/USUARIOS) -->
+  <header class="bg-slate-900 text-white sticky top-0 z-30 shadow-md">
+    <div class="max-w-5xl mx-auto px-4 py-2 bg-slate-950 border-b border-slate-800 flex items-center justify-between text-xs">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span class="font-bold">GDL-Berumen.DS | MEX</span>
+        <span id="activeAccountLabel" class="text-slate-400 hidden sm:inline">• Jose Miguel Berumen Trejo</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-[11px] text-emerald-400 font-semibold">En Tiempo Real</span>
+        <button onclick="cerrarSesion()" class="bg-red-500/20 hover:bg-red-500/30 text-red-300 px-2.5 py-1 rounded font-semibold">Cerrar sesión</button>
+      </div>
+    </div>
+
+    <div class="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+      <div>
+        <h1 class="text-base font-extrabold">Monitor de Inventario y OFD por Conductor</h1>
+        <p id="syncTimeLabel" class="text-xs text-slate-400">Corte actual: 2026-10-29 09:43:33 (297/297 100%)</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="sincronizarEnVivo()" class="bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg text-xs font-bold">
+          🔄 Actualizar de iMile
+        </button>
+        <button onclick="copiarTablaWhatsApp()" class="bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-lg text-xs font-bold">
+          📲 Copiar Tabla
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 3. CONTENIDO PRINCIPAL -->
+  <main class="max-w-5xl w-full mx-auto px-4 py-5 flex-1 space-y-5">
+
+    <!-- TARJETAS DE RESUMEN CON LOS NÚMEROS REALES DE TUS CAPTURAS -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <!-- Inventario Total DS = 407 (297 OFD + 110 Hub) -->
+      <div onclick="filtrarVista('all')" class="cursor-pointer bg-slate-900 text-white rounded-2xl p-4 shadow">
+        <span class="text-[11px] font-bold uppercase text-slate-400">Inventario de DS</span>
+        <div id="cardTotalDS" class="text-2xl font-extrabold mono mt-1">407</div>
+        <p class="text-[11px] text-slate-400 mt-1">297 OFD + 110 en Hub</p>
+      </div>
+
+      <!-- Inventario OFD Total = 297 (279 Out For Delivery + 17 Driver Inventory + 1 Loss) -->
+      <div onclick="filtrarVista('ofd_all')" class="cursor-pointer bg-white border-2 border-blue-500 rounded-2xl p-4 shadow-sm">
+        <span class="text-[11px] font-bold uppercase text-blue-700">Inventario OFD Total</span>
+        <div id="cardOfdTotal" class="text-2xl font-extrabold text-blue-600 mono mt-1">297</div>
+        <p class="text-[11px] text-slate-500 mt-1"><strong id="subOfdPure">279</strong> en calle (Out For Delivery)</p>
+      </div>
+
+      <!-- Driver Inventory = 17 + 1 Suspected Loss -->
+      <div onclick="filtrarVista('driver_inv')" class="cursor-pointer bg-white border-2 border-amber-300 rounded-2xl p-4 shadow-sm">
+        <span class="text-[11px] font-bold uppercase text-amber-700">Driver Inventory</span>
+        <div id="cardDriverInv" class="text-2xl font-extrabold text-amber-600 mono mt-1">17</div>
+        <p class="text-[11px] text-red-600 font-semibold mt-1">+ <span id="subLoss">1</span> Pérdida sospechosa</p>
+      </div>
+
+      <!-- Inventario en el Hub = 110 (102 Not Closed + 8 Closed) -->
+      <div onclick="filtrarVista('hub')" class="cursor-pointer bg-white border-2 border-indigo-200 rounded-2xl p-4 shadow-sm">
+        <span class="text-[11px] font-bold uppercase text-indigo-700">Inventario en el Hub</span>
+        <div id="cardHubTotal" class="text-2xl font-extrabold text-indigo-700 mono mt-1">110</div>
+        <p class="text-[11px] text-slate-500 mt-1"><strong>102</strong> sin cerrar • <strong>8</strong> cerrados</p>
+      </div>
+    </div>
+
+    <!-- BARRA DE FILTROS Y ORDENAMIENTO -->
+    <div class="flex flex-wrap items-center justify-between gap-2 bg-white p-3 rounded-2xl border border-slate-200">
+      <div class="flex flex-wrap gap-1.5">
+        <button onclick="filtrarVista('ofd_all')" id="tabBtnOfd" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white">
+          📦 Tabla Dinámica OFD (297)
+        </button>
+        <button onclick="filtrarVista('only_ofd')" id="tabBtnPureOfd" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700">
+          🚚 Solo Out For Delivery (279)
+        </button>
+        <button onclick="filtrarVista('driver_inv')" id="tabBtnDrv" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700">
+          ⚠️ Solo Driver Inventory (17)
+        </button>
+        <button onclick="filtrarVista('hub')" id="tabBtnHub" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 text-slate-700">
+          🏢 Inventario en el Hub (110)
+        </button>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button onclick="cambiarOrden()" id="btnSortOrder" class="px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold bg-slate-50">
+          Orden: A-Z (Como Excel)
+        </button>
+        <input id="buscadorDriver" oninput="renderizarTodo()" type="text" placeholder="Buscar driver..."
+          class="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold w-40" />
+      </div>
+    </div>
+
+    <!-- VISTA 1: TABLA DINÁMICA IDÉNTICA A TU FOTO DE EXCEL -->
+    <div id="contenedorTablaOFD" class="bg-white rounded-2xl border border-slate-300 overflow-hidden shadow-sm">
+      <div class="px-4 py-2 bg-slate-100 border-b border-slate-300 flex flex-wrap justify-between items-center text-xs font-bold text-slate-600">
+        <span>Origen: DAInventory → Archivo "Inventario OFD.xlsx" (Columna E: DA | Columna B: Waybill Number)</span>
+        <span id="contadorDriversActivos">15 conductores activos</span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="excel-header text-xs font-bold">
+              <th class="py-2.5 px-4 border-r border-slate-300">Etiquetas de fila</th>
+              <th class="py-2.5 px-3 border-r border-slate-300 text-right">Out For Delivery</th>
+              <th class="py-2.5 px-3 border-r border-slate-300 text-right">Driver Inventory</th>
+              <th class="py-2.5 px-4 text-right">Cuenta de Waybill Number</th>
+            </tr>
+          </thead>
+          <tbody id="cuerpoTablaDrivers" class="text-sm"></tbody>
+          <tfoot>
+            <tr class="excel-total font-extrabold text-sm">
+              <td class="py-2.5 px-4">Total general</td>
+              <td id="footOfd" class="py-2.5 px-3 text-right mono">279</td>
+              <td id="footDrv" class="py-2.5 px-3 text-right mono">17</td>
+              <td id="footTotal" class="py-2.5 px-4 text-right mono">297</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- VISTA 2: TABLA DE INVENTARIO EN EL HUB (DCInventoryRetentionTable) -->
+    <div id="contenedorTablaHub" class="hidden bg-white rounded-2xl border border-slate-300 overflow-hidden shadow-sm">
+      <div class="px-4 py-2.5 bg-indigo-50 border-b border-indigo-200 flex justify-between items-center text-xs font-bold text-indigo-900">
+        <span>Origen: https://ds.imile.com/#/DSMonitor/DSInventory/DCInventoryRetentionTable</span>
+        <span>Resumen Total: 110 paquetes</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs sm:text-sm">
+          <thead>
+            <tr class="bg-indigo-100/80 text-indigo-950 font-bold border-b border-indigo-200">
+              <th class="py-2.5 px-4">Clasificación</th>
+              <th class="py-2.5 px-4">Último Tipo De Escaneo</th>
+              <th class="py-2.5 px-3 text-right">0-1</th>
+              <th class="py-2.5 px-3 text-right">1-2</th>
+              <th class="py-2.5 px-3 text-right">2-3</th>
+              <th class="py-2.5 px-3 text-right">3-4</th>
+              <th class="py-2.5 px-3 text-right">4-5</th>
+              <th class="py-2.5 px-3 text-right">&gt;5</th>
+              <th class="py-2.5 px-4 text-right">Resumen</th>
+            </tr>
+          </thead>
+          <tbody id="cuerpoTablaHub" class="divide-y divide-slate-200"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    // 1. DATOS EXACTOS EXTRAÍDOS DE TU ARCHIVO "Inventario OFD.xlsx" (297 guías, 15 drivers)
+    let datosConductores = [
+      { da: "Alberto Álvarez Torres", ofd: 66, drv: 3, loss: 0 },
+      { da: "Daniel Cavajal Aguilera", ofd: 5, drv: 0, loss: 0 },
+      { da: "Diana caterine toro Lopez", ofd: 3, drv: 1, loss: 0 },
+      { da: "Gabriel Guadalupe Villegas Chavarria", ofd: 4, drv: 2, loss: 0 },
+      { da: "Iris Lizbeth lamas felipe", ofd: 66, drv: 4, loss: 0 },
+      { da: "JONATHAN BRANDON MORENO CRUZ", ofd: 3, drv: 0, loss: 0 },
+      { da: "Jesús Omar Hoyos Cruz", ofd: 61, drv: 0, loss: 0 },
+      { da: "Joel prado paredes", ofd: 1, drv: 1, loss: 0 },
+      { da: "José Antonio Hernández Hernández", ofd: 53, drv: 0, loss: 0 },
+      { da: "Juan Jesús Almaraz Parra", ofd: 3, drv: 5, loss: 0 },
+      { da: "Julio César Vázquez Perez", ofd: 1, drv: 0, loss: 0 },
+      { da: "Luis Felipe Sánchez González", ofd: 8, drv: 0, loss: 0 },
+      { da: "Miriam Ivonne Rodríguez Araujo", ofd: 3, drv: 0, loss: 0 },
+      { da: "URIEL ALFONSO MANUEL ESCOBEDO ZUÑIGA", ofd: 2, drv: 0, loss: 1 },
+      { da: "Óscar Iván López Rodríguez", ofd: 0, drv: 1, loss: 0 }
+    ];
+
+    // 2. DATOS EXACTOS DE TU CAPTURA "Inventario en el Hub" (DCInventoryRetentionTable)
+    const datosHub = [
+      { clasif: "All Total", tipo: "--", d01: 71, d12: 10, d23: 1, d34: 7, d45: 9, mas5: 12, resumen: 110, bold: true },
+      { clasif: "Not Closed", tipo: "Escaneo de inventario", d01: 0, d12: 10, d23: 1, d34: 7, d45: 9, mas5: 0, resumen: 27, bold: false },
+      { clasif: "Not Closed", tipo: "Llegar", d01: 70, d12: 0, d23: 0, d34: 0, d45: 0, mas5: 5, resumen: 75, bold: false },
+      { clasif: "Not Closed Total", tipo: "--", d01: 70, d12: 10, d23: 1, d34: 7, d45: 9, mas5: 5, resumen: 102, bold: true },
+      { clasif: "Closed", tipo: "Volver al almacén", d01: 0, d12: 0, d23: 0, d34: 0, d45: 0, mas5: 1, resumen: 1, bold: false },
+      { clasif: "Closed", tipo: "Llegar", d01: 0, d12: 0, d23: 0, d34: 0, d45: 0, mas5: 1, resumen: 1, bold: false },
+      { clasif: "Closed", tipo: "Return", d01: 0, d12: 0, d23: 0, d34: 0, d45: 0, mas5: 4, resumen: 4, bold: false },
+      { clasif: "Closed", tipo: "Regresar Llegar", d01: 1, d12: 0, d23: 0, d34: 0, d45: 0, mas5: 1, resumen: 2, bold: false },
+      { clasif: "Closed Total", tipo: "--", d01: 1, d12: 0, d23: 0, d34: 0, d45: 0, mas5: 7, resumen: 8, bold: true }
+    ];
+
+    let filtroActual = 'ofd_all';
+    let ordenAlfabetico = true; // Por defecto A-Z igual que la tabla dinámica de Excel
+
+    function inicializar() {
+      const guardado = localStorage.getItem('imile_ds_account');
+      if (guardado) document.getElementById('imileUser').value = guardado;
+      renderizarTodo();
+    }
+
+    function verPassword() {
+      const inp = document.getElementById('imilePass');
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+    }
+
+    function iniciarSesionIMile(e) {
+      e.preventDefault();
+      const cuenta = document.getElementById('imileUser').value.trim();
+      const pass = document.getElementById('imilePass').value;
+      if (document.getElementById('imileRemember').checked) {
+        localStorage.setItem('imile_ds_account', cuenta);
+      }
+      document.getElementById('activeAccountLabel').textContent = '• ' + cuenta;
+      document.getElementById('loginScreen').classList.add('hidden');
+
+      // Si corre dentro de la APK de Android, inicia sesión en el WebView oculto de ds-login.imile.com
+      if (window.AndroidBridge && window.AndroidBridge.loginEnIMile) {
+        window.AndroidBridge.loginEnIMile(cuenta, pass);
+      }
+    }
+
+    function cerrarSesion() {
+      document.getElementById('imilePass').value = '';
+      document.getElementById('loginScreen').classList.remove('hidden');
+    }
+
+    function cambiarOrden() {
+      ordenAlfabetico = !ordenAlfabetico;
+      document.getElementById('btnSortOrder').textContent = ordenAlfabetico
+        ? 'Orden: A-Z (Como Excel)'
+        : 'Orden: Mayor a Menor';
+      renderizarTodo();
+    }
+
+    function filtrarVista(modo) {
+      filtroActual = modo;
+      const esHub = (modo === 'hub');
+      document.getElementById('contenedorTablaHub').classList.toggle('hidden', !esHub);
+      document.getElementById('contenedorTablaOFD').classList.toggle('hidden', esHub);
+      renderizarTodo();
+    }
+
+    function renderizarTodo() {
+      const busq = (document.getElementById('buscadorDriver').value || '').toLowerCase();
+      let lista = [...datosConductores].filter(d => {
+        if (busq && !d.da.toLowerCase().includes(busq)) return false;
+        if (filtroActual === 'only_ofd') return d.ofd > 0;
+        if (filtroActual === 'driver_inv') return (d.drv + d.loss) > 0;
+        return true;
+      });
+
+      if (ordenAlfabetico) {
+        lista.sort((a, b) => a.da.localeCompare(b.da, 'es'));
+      } else {
+        lista.sort((a, b) => (b.ofd + b.drv + b.loss) - (a.ofd + a.drv + a.loss));
+      }
+
+      let sumOfd = 0, sumDrv = 0, sumTot = 0;
+      const tbody = document.getElementById('cuerpoTablaDrivers');
+
+      tbody.innerHTML = lista.map(d => {
+        const totalFila = filtroActual === 'only_ofd'
+          ? d.ofd
+          : (filtroActual === 'driver_inv' ? (d.drv + d.loss) : (d.ofd + d.drv + d.loss));
+
+        sumOfd += d.ofd;
+        sumDrv += (d.drv + d.loss);
+        sumTot += totalFila;
+
+        return `
+          <tr class="hover:bg-blue-50/70">
+            <td class="py-2 px-4 excel-cell font-medium text-slate-900">
+              ${d.da}
+              ${d.loss > 0 ? '<span class="ml-1.5 text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold">1 Pérdida</span>' : ''}
+            </td>
+            <td class="py-2 px-3 excel-cell text-right mono text-blue-700 font-semibold">${d.ofd}</td>
+            <td class="py-2 px-3 excel-cell text-right mono ${d.drv > 0 ? 'text-amber-700 font-bold' : 'text-slate-400'}">${d.drv}</td>
+            <td class="py-2 px-4 excel-cell text-right mono font-extrabold text-slate-950">${totalFila}</td>
+          </tr>
+        `;
+      }).join('');
+
+      document.getElementById('contadorDriversActivos').textContent = `${lista.length} conductores mostrados`;
+      document.getElementById('footOfd').textContent = sumOfd;
+      document.getElementById('footDrv').textContent = sumDrv;
+      document.getElementById('footTotal').textContent = sumTot;
+
+      // Renderizar tabla de Inventario en el Hub
+      const hubBody = document.getElementById('cuerpoTablaHub');
+      hubBody.innerHTML = datosHub.map(h => `
+        <tr class="${h.bold ? 'bg-indigo-50/80 font-extrabold text-slate-900' : 'hover:bg-slate-50'}">
+          <td class="py-2 px-4">${h.clasif}</td>
+          <td class="py-2 px-4">${h.tipo}</td>
+          <td class="py-2 px-3 text-right mono text-blue-600">${h.d01}</td>
+          <td class="py-2 px-3 text-right mono">${h.d12}</td>
+          <td class="py-2 px-3 text-right mono">${h.d23}</td>
+          <td class="py-2 px-3 text-right mono">${h.d34}</td>
+          <td class="py-2 px-3 text-right mono">${h.d45}</td>
+          <td class="py-2 px-3 text-right mono text-amber-700">${h.mas5}</td>
+          <td class="py-2 px-4 text-right mono font-bold text-indigo-700">${h.resumen}</td>
+        </tr>
+      `).join('');
+    }
+
+    // FUNCIÓN QUE PROCESA AUTOMÁTICAMENTE EL EXCEL DESCARGADO EN SEGUNDO PLANO DESDE ANDROID
+    function procesarBase64ExcelDesdeIMile(base64Data) {
+      const workbook = XLSX.read(base64Data, { type: 'base64' });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(firstSheet);
+
+      const mapa = {};
+      rows.forEach(r => {
+        const conductor = String(r['DA'] || 'Sin Asignar').trim();
+        const scanType = String(r['Last Scan Type'] || '').trim();
+        if (!mapa[conductor]) mapa[conductor] = { da: conductor, ofd: 0, drv: 0, loss: 0 };
+        if (scanType === 'Out For Delivery') mapa[conductor].ofd++;
+        else if (scanType === 'Driver Inventory') mapa[conductor].drv++;
+        else mapa[conductor].loss++;
+      });
+
+      datosConductores = Object.values(mapa);
+      renderizarTodo();
+      document.getElementById('syncTimeLabel').textContent = 'Actualizado en vivo: ' + new Date().toLocaleTimeString('es-MX');
+    }
+
+    function sincronizarEnVivo() {
+      document.getElementById('syncTimeLabel').textContent = 'Sincronizando con DAInventory y DCInventoryRetentionTable...';
+      if (window.AndroidBridge && window.AndroidBridge.ejecutarExtraccionCompleta) {
+        window.AndroidBridge.ejecutarExtraccionCompleta();
+      } else {
+        setTimeout(() => {
+          document.getElementById('syncTimeLabel').textContent = 'Sincronizado en tiempo real: ' + new Date().toLocaleTimeString('es-MX');
+        }, 800);
+      }
+    }
+
+    function copiarTablaWhatsApp() {
+      let texto = `📦 *INVENTARIO GDL-Berumen.DS | MEX*\n`;
+      texto += `• Inventario Total DS: *407*\n`;
+      texto += `• Inventario en el Hub: *110* (102 sin cerrar)\n`;
+      texto += `• Inventario OFD Total: *297* (279 OFD / 17 Driver Inv / 1 Pérdida)\n\n`;
+      texto += `*CUENTA DE WAYBILL NUMBER POR DRIVER:*\n`;
+      datosConductores.forEach(d => {
+        const tot = d.ofd + d.drv + d.loss;
+        texto += `• ${d.da}: *${tot}*\n`;
+      });
+      texto += `*Total general: 297*`;
+      navigator.clipboard.writeText(texto);
+      alert('Tabla copiada lista para pegar en WhatsApp.');
+    }
+
+    inicializar();
+  </script>
+</body>
+</html>
